@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIで株価予測アプリ</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css')}}">
+  <!-- <link rel="stylesheet" href="../static/style.css"> -->
+</head>
+
+<body>
+  <header class="" topbar">
+    <div class="container topbar-inner">
+      <span class="brand-mark">F</span>
+      <span class="brand">FinTech Lab
+        <span class="brand-light">/ Flask Edition</span>
+      </span>
+      <span class="eyebrow">Python学習用デモ</span>
+    </div>
+  </header>
+  <main class="container">
+    <section class="hero">
+      <div class="hero-kicker">
+        FINNANCIAL DATA × MACHINE LEARNING
+      </div>
+      <h1>AIで株価分析・予測アプリ</h1>
+      <p>株価の変動を可視化し、線形回帰モデルを使って将来30期間の終値を予測します。</p>
+      <div class="tech-tags">
+        <span>Flask</span>
+        <span>yfinance</span>
+        <span>scikit-learn</span>
+        <span>Plotly</span>
+      </div>
+    </section>
+
+    <section class="search-card" aria-labelledby="ticker-label">
+      <form action="{{url_for('index')}}" method="post">
+        <label for="ticker" id="ticker-label">株価銘柄のティッカーシンボル</label>
+        <p class="hint">例：AAPL(Apple) / MSFT(Microsoft) / 7203.T(トヨタ) / BTC-USD(Bitcoin)</p>
+        <div class="form-controls">
+          <input type="text" id="ticker" name="ticker" value="{{ticker}}" placeholder="AAPL" maxlength="18"
+            pattern="[A-Za-z0-9^=._-]{1,18}" autocomplete="off" required spellcheck="false">
+          <button type="submit" name="action" value="analyze" class="btn btn-primary">株価を分析する</button>
+          <button type="submit" name="action" value="predict" class="btn btn-accent">30期間先を予測する</button>
+        </div>
+        <p class="hint foot-hint">銘柄は <a href="https://finance.yahoo.com/" target="_blank"
+            rel="noopener noreferrer">Yahoo Finance</a> などで確認できます。データの取得にはネット接続が必要です。</p>
+      </form>
+    </section>
+
+    {% if error %}
+    <section role="alert" class="error-card"><strong>取得・分析できませんでした</strong>
+      <p>{{error}}</p>
+    </section>
+    {% endif %}
+
+    {% if has_data %}
+
+    <div class="results-header">
+      <div>
+        <p class="section-overline">MARKET OVERVIEW</p>
+        <h2>{{ticker}}
+          <span class="title-muted">株価分析</span>
+        </h2>
+      </div>
+      <p class="timestamp">最新の取得日 {{summary.last_date}}</p>
+    </div>
+    <div class="stats-grid">
+      <article class="stat">
+        <div class="stat-label">最新の終値</div>
+        <div class="stat-value">{{ summary.close }}</div>
+        <div class="stat-help">銘柄の取引通貨で表示</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">前の取引日からの変化</div>
+        <div class="stat-value">{{ summary.previous_change_pct }}</div>
+        <div class="stat-help">終値ベースの騰落率</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">14期間移動平均</div>
+        <div class="stat-value">{{ summary.sma14 }}</div>
+        <div class="stat-help">SMA14</div>
+      </article>
+      <article class="stat">
+        <div class="stat-label">取得したデータ数</div>
+        <div class="stat-value">{{ summary.data_count }}</div>
+        <div class="stat-help">2021-01-05以降の日足</div>
+      </article>
+    </div>
+
+    <section class="card" aria-labelledby="closing-title">
+      <div class="section-head">
+        <div>
+          <p class="section-overline">PRICE TREND</p>
+          <h3 id="closeing-title">終値と14期間移動平均</h3>
+        </div>
+      </div>
+      <div class="plot">{{ charts.closing|safe }}</div>
+    </section>
+    <div class="chart-grid">
+      <section class="card" aria-labelledby="change-title">
+        <div class="section-head">
+          <div>
+            <p class="section-overline">DAIRY CHANGE</p>
+            <h3 id="change-title">始値から終値への変動率（直近100件）</h3>
+          </div>
+        </div>
+        <div class="plot">{{ charts.change|safe }}</div>
+      </section>
+      <section class="card" aria-labelledby="candle-title">
+        <div class="section-head">
+          <div>
+            <p class="section-overline">CANDLESTICK</p>
+            <h3 id="candle-title">ローソク足（直近180件）</h3>
+          </div>
+        </div>
+        <div class="plot">{{ charts.candle|safe }}</div>
+      </section>
+    </div>
+
+    {% if prediction %}
+    <section class="card prediction-card" aria-labelledby="predict-title">
+      <div class="section-head">
+        <div>
+          <p class="section-overline">MACHINE LEARNING FORECAST</p>
+          <h3 id="predict-title">線形回帰による30期間先の予測</h3>
+        </div>
+        <span class="method-pill">LinearRegression</span>
+      </div>
+      <div class="forecast-stats">
+        <div>
+          <span>検証データのR2</span>
+          <strong>{{ prediction.r2 }}</strong>
+        </div>
+        <div>
+          <span>平均絶対誤差（MAE）</span>
+          <strong>{{ prediction.mae }}</strong>
+        </div>
+        <div>
+          <span>未来の日付の置き方</span>
+          <strong class="small-strong">{{ prediction.calendar }}</strong>
+        </div>
+      </div>
+      <p class="model-note">R2は「正答率」「信頼度」ではありません。1が良い値で、0やマイナスになることもあります。過去を時系列順に分けて検証した値であり、将来の制度を保証しません。</p>
+      <div class="plot">{{ charts.prediction|safe }}</div>
+      <details class="details">
+        <summary>予測した30期間の日付と終値を表示</summary>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>日付（目安）</th>
+                <th>予測終値</th>
+              </tr>
+            </thead>
+            <tbody>{% for row in prediction.rows %}
+              <tr>
+                <td>{{ row.date }}</td>
+                <td>{{ row.price }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      <p class="fine-print">直近30件の特徴量から30行先の終値を求めます。株式の予測日付は原則平日を使用し、各市場の祝日・休場日は厳密に反映していません。予測値は各市場の取引通貨による概算です。</p>
+    </section>
+    {% endif %}
+    <section class="card data-card" aria-labelledby="table-title">
+      <div class="section-head">
+        <div>
+          <p class="section-overline">SOURCE DATA</p>
+          <h3 id="table-title">最近の株価データ（20件）</h3>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>始値</th>
+              <th>高値</th>
+              <th>安値</th>
+              <th>終値</th>
+              <th>出来高</th>
+              <th>当日変動率</th>
+            </tr>
+          </thead>
+          <tbody>{% for row in table_rows %}
+            <tr>
+              <td>{{ row.date }}</td>
+              <td>{{ row.open }}</td>
+              <td>{{ row.high }}</td>
+              <td>{{ row.low }}</td>
+              <td class="number-bold">{{ row.close }}</td>
+              <td>{{ row.volume }}</td>
+              <td class="{{ 'up' if row.positive else 'down'}}">{{ row.change }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% else %}
+    <section class="onboarding">
+      <div class="onboarding-icon">➚</div>
+      <h2>分析する銘柄を入力してください</h2>
+      <p>「株価を分析する」でグラフと価格表、「30期間先を予測する」で機械学習の予測グラフも表示します。</p>
+    </section>
+    {% endif %}
+  </main>
+  <footer class="footer">
+    <div class="container">
+      <p>教材：Pythonで株価・暗号通過分析と機械学習で予測（Version 4）をもとにFlaskへ移植</p>
+      <p>このサイトはPython学習用です。投資助言や将来の株価を保証するものではありません。</p>
+    </div>
+  </footer>
+</body>
+
+</html>
